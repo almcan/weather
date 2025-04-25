@@ -64,8 +64,8 @@ type CityWeather struct {
 	TempTodayHigh   string   `json:"tempTodayHigh"`   // 今日の最高気温
 	TempTmrwLow     string   `json:"tempTmrwLow"`     // 明日の最低気温
 	TempTmrwHigh    string   `json:"tempTmrwHigh"`    // 明日の最高気温
-	Pops            []string `json:"pop"`             // 降水確率
-	Winds           []string `json:"winds"`           // 風
+	Pops            []string `json:"Pops"`            // 降水確率
+	Winds           []string `json:"Winds"`           // 風
 	Error           string   `json:"error,omitempty"` // エラー情報 (あれば)
 }
 
