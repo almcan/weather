@@ -55,15 +55,18 @@ type WeatherResponse struct {
 
 // CityWeather は各都市の天気情報を保持する構造体
 type CityWeather struct {
-	AreaCode        string `json:"areaCode"`        // リクエストに使ったエリアコード
-	ReportTime      string `json:"reportTime"`      // 発表日時
-	AreaName        string `json:"areaName"`        // 予報区名 (例: "東京地方", "大阪府")
-	TodayWeather    string `json:"todayWeather"`    // 今日の天気
-	TomorrowWeather string `json:"tomorrowWeather"` // 明日の天気
-	TempAreaName    string `json:"tempAreaName"`    // 気温地点名 (例: "東京", "大阪")
-	TempTodayHigh   string `json:"tempTodayHigh"`   // 今日の最高気温
-	TempTmrwLow     string `json:"tempTmrwLow"`     // 明日の最低気温
-	TempTmrwHigh    string `json:"tempTmrwHigh"`    // 明日の最高気温
+	AreaCode        string   `json:"areaCode"`        // リクエストに使ったエリアコード
+	ReportTime      string   `json:"reportTime"`      // 発表日時
+	AreaName        string   `json:"areaName"`        // 予報区名 (例: "東京地方", "大阪府")
+	TodayWeather    string   `json:"todayWeather"`    // 今日の天気
+	TomorrowWeather string   `json:"tomorrowWeather"` // 明日の天気
+	TempAreaName    string   `json:"tempAreaName"`    // 気温地点名 (例: "東京", "大阪")
+	TempTodayHigh   string   `json:"tempTodayHigh"`   // 今日の最高気温
+	TempTmrwLow     string   `json:"tempTmrwLow"`     // 明日の最低気温
+	TempTmrwHigh    string   `json:"tempTmrwHigh"`    // 明日の最高気温
+	Pops            []string `json:"pop"`             // 降水確率
+	Winds           []string `json:"winds"`           // 風
+	Error           string   `json:"error,omitempty"` // エラー情報 (あれば)
 }
 
 // グローバル変数で天気データを保持
@@ -134,6 +137,10 @@ func fetchWeatherData() {
 				if len(areaWeather.Weathers) > 1 {
 					cityWeather.TomorrowWeather = areaWeather.Weathers[1]
 				}
+				// 風情報の取得: TimeSeries[0] の Areas[0] を使う (最初の予報区)
+				if len(areaWeather.Winds) > 0 {
+					cityWeather.Winds = areaWeather.Winds // 風情報をセット (最初の要素を使用)
+				}
 			} else {
 				log.Printf("注意: エリア [%s] で天気情報が見つかりません (TimeSeries[0]/Areas[0])。", areaCode)
 			}
@@ -164,6 +171,19 @@ func fetchWeatherData() {
 			}
 			if !foundTemp {
 				log.Printf("注意: エリア [%s] で気温情報 (Temps) が見つかりません。", areaCode)
+			}
+
+			foundPops := false
+			// TimeSeries 配列をループして Pops を探す
+			for _, ts := range todayForecast.TimeSeries {
+				if len(ts.Areas) > 0 && len(ts.Areas[0].Pops) > 0 {
+					cityWeather.Pops = ts.Areas[0].Pops
+					foundPops = true
+					break
+				}
+			}
+			if !foundPops {
+				log.Printf("注意: エリア [%s] で降水確率情報 (Pops) が見つかりません。", areaCode)
 			}
 
 			// 抽出した都市の天気情報をリストに追加

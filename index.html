@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>お天気アプリ</title>
+    <title>お天気サイト</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -86,20 +86,126 @@
             border-radius: 5px;
             grid-column: 1 / -1;
         }
+
+        #refresh-button {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        #refresh-button:hover {
+            background-color: #0056b3;
+        }
+        #refresh-button:active {
+            background-color: #004085;
+        }
+
+        .loading-message {
+            text-align: center;
+            font-style: italic;
+            color: #555;
+            padding: 20px;
+            grid-column: 1 / -1;
+        }
+        #weather-detail-modal {
+            width: 85%;
+            max-width: 550px;
+            padding: 25px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.25);
+            /* ダイアログが <dialog> タグの機能で中央表示されない場合に備えてコメントアウトで残す */
+            /* position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); */
+        }
+
+        /* ダイアログ表示時の背景を少し暗くするスタイル */
+        #weather-detail-modal::backdrop {
+            background-color: rgba(0, 0, 0, 0.6);
+        }
+
+        /* モーダル内の見出し (都市名) */
+        #modal-city-name {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #3498db;
+            font-size: 1.6em;
+        }
+
+        /* モーダルのコンテンツ表示エリア */
+        #modal-content {
+            margin-top: 20px;
+            margin-bottom: 20px;
+            max-height: 60vh;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+        /* 詳細情報内の各行のスタイル (例) */
+        #modal-content p {
+             margin-bottom: 10px;
+        }
+         #modal-content strong {
+             color: #333;
+             margin-right: 5px;
+         }
+
+
+        /* モーダルの閉じるボタン */
+        #modal-close-button {
+            padding: 8px 16px;
+            font-size: 0.9em;
+            cursor: pointer;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        #modal-close-button:hover {
+            background-color: #5a6268;
+        }
     </style>
 </head>
 <body>
 
     <h1>主要都市のお天気</h1>
 
+    <div style="text-align: center; margin-bottom: 20px;">
+        <button id="refresh-button">天気情報を更新</button>
+
+    </div>
+
     <div id="weather-info">
         <p>天気情報を読み込み中...</p>
         </div>
 
+        <dialog id="weather-detail-modal">
+            <h2 id="modal-city-name">（都市名）</h2>
+            <hr>
+            <div id="modal-content">
+                <p>詳細情報を準備中...</p>
+            </div>
+            <hr>
+            <div style="text-align: right; margin-top: 15px;">
+              <button id="modal-close-button" autofocus>閉じる</button>
+            </div>
+        </dialog>
+        
     <script>
         console.log("JavaScript実行開始");
         const apiUrl = 'http://localhost:8080/api/weather';
         const weatherInfoDiv = document.getElementById('weather-info');
+        const refreshButton = document.getElementById('refresh-button');
+        const modal = document.getElementById('weather-detail-modal');
+        const modalCityName = document.getElementById('modal-city-name');
+        const modalContent = document.getElementById('modal-content');
+        const modalCloseButton = document.getElementById('modal-close-button');
+
+        //データを保持する変数 
+        let allWeatherData = [];
 
         async function fetchWeather() {
             console.log("天気データの取得を開始します:", apiUrl);
@@ -110,6 +216,12 @@
                 }
                 const data = await response.json();
                 console.log("取得したデータ:", data);
+                if (data && data.cityWeather) {
+                    allWeatherData = data.cityWeather; // 配列を保持
+                    console.log('allWeatherData に格納:', allWeatherData);
+                } else {
+                    allWeatherData = []; // データがない場合は空に
+                }
                 displayWeather(data);
             } catch (error) {
                 console.error('天気データの取得または処理中にエラーが発生しました:', error);
@@ -126,10 +238,17 @@
                 weatherInfoDiv.innerHTML += `<p class="error">データ取得中に問題が発生しました: ${weatherData.lastError}</p>`;
             }
 
-            if (weatherData.cityWeather && weatherData.cityWeather.length > 0) {
-                weatherData.cityWeather.forEach(city => {
+            if (allWeatherData && allWeatherData.length > 0) {
+                allWeatherData.forEach(city => {
+                    console.log('カード生成中 AreaCode:', city.areaCode);
                     const cityDiv = document.createElement('div');
                     cityDiv.className = 'city-weather'; // CSSクラスを設定
+
+                    cityDiv.dataset.areaCode = city.areaCode;
+                    cityDiv.addEventListener('click', () => {
+                        // クリックされたら showModalDetails 関数を呼び出す
+                        showModalDetails(city.areaCode);
+                    });
 
                     let todayIcon = getWeatherIcon(city.todayWeather);
                     let tomorrowIcon = getWeatherIcon(city.tomorrowWeather);
@@ -150,6 +269,77 @@
             } else if (!weatherData.lastError) { // エラーがなくデータもない場合
                 weatherInfoDiv.innerHTML = '<p>表示できる天気情報がありません。</p>';
             }
+        }
+
+        //モーダルに詳細を表示する関数
+        function showModalDetails(areaCode) {
+            console.log("showModalDetails 呼び出し AreaCode:", areaCode);
+            console.log("検索対象の allWeatherData:", allWeatherData); // 検索前のデータ確認
+            // allWeatherData 配列から areaCode が一致する都市データを検索
+            const cityData = allWeatherData.find(city => city.areaCode === areaCode);
+            console.log("findの結果 cityData:", cityData); // 検索結果を確認
+            console.log("詳細表示リクエスト:", areaCode);
+
+            if (cityData && modal) { // 都市データとモーダル要素が存在する場合
+                // 1. モーダルのタイトルを設定
+                modalCityName.textContent = `${cityData.areaName} (${cityData.tempAreaName || cityData.areaName}) の詳細情報`;
+
+                // 2. モーダルのコンテンツ部分(HTML)を組み立てる
+                let detailsHtml = `
+                    <p><strong>今日の天気:</strong> ${cityData.todayWeather || '情報なし'}</p>
+                    <p><strong>明日の天気:</strong> ${cityData.tomorrowWeather || '情報なし'}</p>
+                    <p><strong>今日の最高気温:</strong> ${cityData.tempTodayHigh || 'N/A'}℃</p>
+                    <p><strong>明日の最低/最高気温:</strong> ${cityData.tempTmrwLow || 'N/A'}℃ / ${cityData.tempTmrwHigh || 'N/A'}℃</p>
+                `;
+
+                // 降水確率(Pops)があれば表示
+                if (cityData.Pops && cityData.Pops.length > 0) {
+                    // 時間帯情報もあれば表示したいが、今回は確率だけ表示する例
+                    detailsHtml += `<p><strong>降水確率 (%):</strong> ${cityData.Pops.join(' - ')}</p>`;
+                } else {
+                    detailsHtml += `<p><strong>降水確率 (%):</strong> 情報なし</p>`;
+                }
+
+                // 風(Winds)があれば表示
+                if (cityData.Winds && cityData.Winds.length > 0) {
+                    // 時間帯ごとの情報などをどう表示するかは要検討 (今回は最初の情報のみ)
+                    detailsHtml += `<p><strong>風:</strong> ${cityData.Winds[0]}</p>`;
+                    // 全て表示する場合: `<p><strong>風:</strong> ${cityData.Winds.join('<br>')}</p>`
+                } else {
+                    detailsHtml += `<p><strong>風:</strong> 情報なし</p>`;
+                }
+
+                // (ここに週間予報などの表示を追加することも可能)
+
+                detailsHtml += `<hr><p><small>発表日時: ${cityData.reportTime}<br>エリアコード: ${cityData.areaCode}</small></p>`;
+
+                // 組み立てたHTMLをモーダルのコンテンツ部分に挿入
+                modalContent.innerHTML = detailsHtml;
+
+                // 3. モーダルダイアログを表示する
+                modal.showModal();
+
+            } else {
+                console.error("詳細表示のためのデータまたはモーダル要素が見つかりません。 AreaCode:", areaCode);
+                alert("詳細情報を表示できませんでした。"); // 簡単なエラー通知
+            }
+        }
+
+        //モーダルを閉じるイベントリスナー
+        if (modal && modalCloseButton) {
+            // 閉じるボタンがクリックされたら閉じる
+            modalCloseButton.addEventListener('click', () => {
+                modal.close();
+            });
+
+            // ダイアログの外側 (::backdrop) がクリックされたら閉じる
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) { // クリックされたのがダイアログ自身(外側)か判定
+                    modal.close();
+                }
+            });
+        } else {
+             console.error("モーダルまたは閉じるボタンが見つかりません。HTMLを確認してください。");
         }
 
         // --- 天気文字列から簡単な絵文字アイコンを返す関数 ---
