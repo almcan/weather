@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>お天気アプリ</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            padding: 20px;
+            color: #333;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+
+        /* 天気情報エリアのスタイル: グリッドレイアウト */
+        #weather-info {
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            padding: 0 10px; 
+        }
+
+        /* 各都市の天気カードのスタイル */
+        .city-weather {
+            background-color: #ffffff; 
+            border: 1px solid #e0e0e0; 
+            padding: 20px;
+            border-radius: 8px; 
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); 
+            transition: transform 0.2s ease-in-out; 
+        }
+
+        /* カードにマウスカーソルが乗った時の効果 */
+        .city-weather:hover {
+            transform: translateY(-5px);
+        }
+
+        /* 都市名のスタイル */
+        .city-name {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #3498db;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #eee;
+        }
+
+        /* 天気アイコンのスタイル */
+        .weather-icon {
+            font-size: 1.5em;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        /* 気温情報のスタイル */
+        .temp-info span {
+            font-weight: 500; 
+            color: #e67e22;
+        }
+
+        /* 細かい情報 (発表日時、エリアコード) のスタイル */
+        .city-weather div {
+             margin-bottom: 8px; 
+        }
+        small {
+            color: #777;
+            font-size: 0.85em;
+            display: block;
+            margin-top: 15px;
+        }
+
+        /* エラーメッセージのスタイル */
+        .error {
+            color: #e74c3c;
+            font-weight: bold;
+            text-align: center;
+            padding: 20px;
+            background-color: #fdeded;
+            border: 1px solid #e74c3c;
+            border-radius: 5px;
+            grid-column: 1 / -1;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>主要都市のお天気</h1>
+
+    <div id="weather-info">
+        <p>天気情報を読み込み中...</p>
+        </div>
+
+    <script>
+        console.log("JavaScript実行開始");
+        const apiUrl = 'http://localhost:8080/api/weather';
+        const weatherInfoDiv = document.getElementById('weather-info');
+
+        async function fetchWeather() {
+            console.log("天気データの取得を開始します:", apiUrl);
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    throw new Error(`APIからの応答エラー: ${response.status} ${response.statusText}`);
+                }
+                const data = await response.json();
+                console.log("取得したデータ:", data);
+                displayWeather(data);
+            } catch (error) {
+                console.error('天気データの取得または処理中にエラーが発生しました:', error);
+                weatherInfoDiv.innerHTML = `<p class="error">天気情報の取得に失敗しました。APIサーバーが起動しているか確認してください。<br>${error.message}</p>`;
+            }
+        }
+
+        // 天気データをHTMLに表示する関数
+        function displayWeather(weatherData) {
+            weatherInfoDiv.innerHTML = ''; // 表示エリアをクリア
+
+            // エラーメッセージ表示 (あれば)
+            if (weatherData.lastError) {
+                weatherInfoDiv.innerHTML += `<p class="error">データ取得中に問題が発生しました: ${weatherData.lastError}</p>`;
+            }
+
+            if (weatherData.cityWeather && weatherData.cityWeather.length > 0) {
+                weatherData.cityWeather.forEach(city => {
+                    const cityDiv = document.createElement('div');
+                    cityDiv.className = 'city-weather'; // CSSクラスを設定
+
+                    let todayIcon = getWeatherIcon(city.todayWeather);
+                    let tomorrowIcon = getWeatherIcon(city.tomorrowWeather);
+
+                    // HTMLの中身を組み立てる (アイコンとクラスを追加)
+                    cityDiv.innerHTML = `
+                        <div class="city-name">${city.areaName} (${city.tempAreaName || city.areaName})</div>
+                        <div><small>発表日時: ${city.reportTime}</small></div>
+                        <div><span class="weather-icon">${todayIcon}</span> 今日: ${city.todayWeather || '情報なし'}</div>
+                        <div><span class="weather-icon">${tomorrowIcon}</span> 明日: ${city.tomorrowWeather || '情報なし'}</div>
+                        <div class="temp-info">今日の最高気温: <span>${city.tempTodayHigh || 'N/A'}℃</span></div>
+                        <div class="temp-info">明日の最低気温: <span>${city.tempTmrwLow || 'N/A'}℃</span> / 最高気温: <span>${city.tempTmrwHigh || 'N/A'}℃</span></div>
+                    `;
+                    // tempAreaName がない場合 areaName を表示、天気や気温がない場合は 'N/A' や '情報なし' を表示
+
+                    weatherInfoDiv.appendChild(cityDiv);
+                });
+            } else if (!weatherData.lastError) { // エラーがなくデータもない場合
+                weatherInfoDiv.innerHTML = '<p>表示できる天気情報がありません。</p>';
+            }
+        }
+
+        // --- 天気文字列から簡単な絵文字アイコンを返す関数 ---
+        function getWeatherIcon(weatherString) {
+            if (!weatherString) return '❓'; // データがない場合
+            if (weatherString.includes('晴れ')) {
+                if (weatherString.includes('くもり') || weatherString.includes('曇り')) return '🌤️'; // 晴れ時々くもり
+                return '☀️'; // 晴れ
+            } else if (weatherString.includes('雨')) {
+                 if (weatherString.includes('くもり') || weatherString.includes('曇り')) return '🌦️'; // くもり時々雨
+                 if (weatherString.includes('雪')) return '🌨️'; // 雨か雪
+                return '🌧️'; // 雨
+            } else if (weatherString.includes('くもり') || weatherString.includes('曇り')) {
+                return '☁️'; // くもり
+            } else if (weatherString.includes('雪')) {
+                return '❄️'; // 雪
+            } else if (weatherString.includes('雷')) {
+                return '⚡'; // 雷
+            } else {
+                return '❓'; // 上記以外は不明
+            }
+        }
+
+        // ページ読み込み時に天気データを取得
+        fetchWeather();
+    </script>
+
+</body>
+</html>
