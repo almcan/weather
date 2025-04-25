@@ -15,12 +15,15 @@ type AreaInfo struct {
 		Name string `json:"name"`
 		Code string `json:"code"`
 	} `json:"area"`
-	WeatherCodes []string `json:"weatherCodes,omitempty"`
-	Weathers     []string `json:"weathers,omitempty"`
-	Winds        []string `json:"winds,omitempty"`
-	Waves        []string `json:"waves,omitempty"`
-	Pops         []string `json:"pops,omitempty"`
-	Temps        []string `json:"temps,omitempty"`
+	WeatherCodes  []string `json:"weatherCodes,omitempty"`
+	Weathers      []string `json:"weathers,omitempty"`
+	Winds         []string `json:"winds,omitempty"`
+	Waves         []string `json:"waves,omitempty"`
+	Pops          []string `json:"pops,omitempty"`
+	Temps         []string `json:"temps,omitempty"`
+	TempsMin      []string `json:"tempsMin,omitempty"`
+	TempsMax      []string `json:"tempsMax,omitempty"`
+	Reliabilities []string `json:"reliabilities,omitempty"`
 }
 type TimeSeriesInfo struct {
 	// JSONの時刻文字列をそのまま受け取る
@@ -33,6 +36,15 @@ type Forecast struct {
 	ReportDatetime time.Time        `json:"reportDatetime"`
 	TimeSeries     []TimeSeriesInfo `json:"timeSeries"`
 	// tempAverage, precipAverage など他のキーは今回は省略
+}
+
+type WeeklyWeather struct {
+	Date        string `json:"date"`                  // 日付 (YYYY-MM-DD)
+	WeatherCode string `json:"weatherCode,omitempty"` // 天気コード
+	Pop         string `json:"pop,omitempty"`         // 降水確率 (%)
+	Reliability string `json:"reliability,omitempty"` // 信頼度 (A, B, C)
+	TempMin     string `json:"tempMin,omitempty"`     // 最低気温 (℃)
+	TempMax     string `json:"tempMax,omitempty"`     // 最高気温 (℃)
 }
 
 // 日本の主要都市のエリアコードリスト (札幌、那覇は都道府県コードのまま)
@@ -55,18 +67,19 @@ type WeatherResponse struct {
 
 // CityWeather は各都市の天気情報を保持する構造体
 type CityWeather struct {
-	AreaCode        string   `json:"areaCode"`        // リクエストに使ったエリアコード
-	ReportTime      string   `json:"reportTime"`      // 発表日時
-	AreaName        string   `json:"areaName"`        // 予報区名 (例: "東京地方", "大阪府")
-	TodayWeather    string   `json:"todayWeather"`    // 今日の天気
-	TomorrowWeather string   `json:"tomorrowWeather"` // 明日の天気
-	TempAreaName    string   `json:"tempAreaName"`    // 気温地点名 (例: "東京", "大阪")
-	TempTodayHigh   string   `json:"tempTodayHigh"`   // 今日の最高気温
-	TempTmrwLow     string   `json:"tempTmrwLow"`     // 明日の最低気温
-	TempTmrwHigh    string   `json:"tempTmrwHigh"`    // 明日の最高気温
-	Pops            []string `json:"Pops"`            // 降水確率
-	Winds           []string `json:"Winds"`           // 風
-	Error           string   `json:"error,omitempty"` // エラー情報 (あれば)
+	AreaCode        string          `json:"areaCode"`        // リクエストに使ったエリアコード
+	ReportTime      string          `json:"reportTime"`      // 発表日時
+	AreaName        string          `json:"areaName"`        // 予報区名 (例: "東京地方", "大阪府")
+	TodayWeather    string          `json:"todayWeather"`    // 今日の天気
+	TomorrowWeather string          `json:"tomorrowWeather"` // 明日の天気
+	TempAreaName    string          `json:"tempAreaName"`    // 気温地点名 (例: "東京", "大阪")
+	TempTodayHigh   string          `json:"tempTodayHigh"`   // 今日の最高気温
+	TempTmrwLow     string          `json:"tempTmrwLow"`     // 明日の最低気温
+	TempTmrwHigh    string          `json:"tempTmrwHigh"`    // 明日の最高気温
+	Pops            []string        `json:"Pops"`            // 降水確率
+	Winds           []string        `json:"Winds"`           // 風
+	WeeklyForecast  []WeeklyWeather `json:"weeklyForecast,omitempty"`
+	Error           string          `json:"error,omitempty"` // エラー情報 (あれば)
 }
 
 // グローバル変数で天気データを保持
@@ -143,6 +156,86 @@ func fetchWeatherData() {
 				}
 			} else {
 				log.Printf("注意: エリア [%s] で天気情報が見つかりません (TimeSeries[0]/Areas[0])。", areaCode)
+			}
+
+			if len(forecasts) > 1 { // 週間予報データ (forecasts[1]) が存在するかチェック
+				weeklyForecastData := forecasts[1]
+				// 日付(YYYY-MM-DD)をキーにして、その日の週間天気情報を一時的に格納するマップ
+				weeklyMap := make(map[string]WeeklyWeather)
+
+				// --- 週間天気(コード,Pops,信頼度)の抽出 ---
+				var weeklyWeatherTs TimeSeriesInfo // 該当するTimeSeriesを格納する変数
+				for _, ts := range weeklyForecastData.TimeSeries {
+					// areas[0].weatherCodes があれば週間天気情報とみなす (簡易的な判定)
+					if len(ts.Areas) > 0 && len(ts.Areas[0].WeatherCodes) > 0 {
+						weeklyWeatherTs = ts
+						break
+					}
+				}
+				if len(weeklyWeatherTs.TimeDefines) > 0 && len(weeklyWeatherTs.Areas) > 0 {
+					areaW := weeklyWeatherTs.Areas[0] // 都道府県全体の情報を使う
+					for i, dateStrISO := range weeklyWeatherTs.TimeDefines {
+						dateKey := dateStrISO[:10]  // "YYYY-MM-DD" の部分だけ取得
+						entry := weeklyMap[dateKey] // マップから取得or新規作成
+						entry.Date = dateKey
+						if len(areaW.WeatherCodes) > i {
+							entry.WeatherCode = areaW.WeatherCodes[i]
+						}
+						if len(areaW.Pops) > i {
+							entry.Pop = areaW.Pops[i]
+						}
+						if len(areaW.Reliabilities) > i {
+							entry.Reliability = areaW.Reliabilities[i]
+						}
+						weeklyMap[dateKey] = entry // マップを更新
+					}
+				} else {
+					log.Printf("注意: エリア [%s] で週間天気(Code/Pop/Rel)情報が見つかりません。", areaCode)
+				}
+
+				// --- 週間気温(最低/最高)の抽出 ---
+				var weeklyTempTs TimeSeriesInfo // 該当するTimeSeriesを格納する変数
+				for _, ts := range weeklyForecastData.TimeSeries {
+					if len(ts.Areas) > 0 && len(ts.Areas[0].TempsMin) > 0 {
+						weeklyTempTs = ts
+						break
+					}
+				}
+				if len(weeklyTempTs.TimeDefines) > 0 && len(weeklyTempTs.Areas) > 0 {
+					// ここでは JSON 内の最初の地点 (Areas[0]) の気温を採用する
+					areaT := weeklyTempTs.Areas[0]
+					// log.Printf("エリア [%s] の週間気温は地点 '%s' を使用", areaCode, areaT.Area.Name)
+					for i, dateStrISO := range weeklyTempTs.TimeDefines {
+						dateKey := dateStrISO[:10]
+						entry := weeklyMap[dateKey]
+						entry.Date = dateKey
+						if len(areaT.TempsMin) > i {
+							entry.TempMin = areaT.TempsMin[i]
+						}
+						if len(areaT.TempsMax) > i {
+							entry.TempMax = areaT.TempsMax[i]
+						}
+						weeklyMap[dateKey] = entry // マップを更新
+					}
+				} else {
+					log.Printf("注意: エリア [%s] で週間気温情報が見つかりません。", areaCode)
+				}
+
+				// --- マップからスライスに変換して格納 ---
+				if len(weeklyMap) > 0 {
+					weeklyForecastSlice := make([]WeeklyWeather, 0, len(weeklyMap))
+					for _, dateStrISO := range weeklyWeatherTs.TimeDefines { // 天気の日付順を基準にする
+						dateKey := dateStrISO[:10]
+						if wf, ok := weeklyMap[dateKey]; ok {
+							weeklyForecastSlice = append(weeklyForecastSlice, wf)
+						}
+					}
+					cityWeather.WeeklyForecast = weeklyForecastSlice
+					log.Printf("エリア [%s] で週間予報を %d 日分抽出", areaCode, len(weeklyForecastSlice))
+				}
+
+			} else {
+				log.Printf("注意: エリア [%s] で週間予報データ (forecasts[1]) が見つかりません。", areaCode)
 			}
 
 			// 気温情報の取得: TimeSeriesの中から Temps が存在する最初の Area を使う

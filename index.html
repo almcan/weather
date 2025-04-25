@@ -343,24 +343,39 @@
         }
 
         // --- 天気文字列から簡単な絵文字アイコンを返す関数 ---
-        function getWeatherIcon(weatherString) {
-            if (!weatherString) return '❓'; // データがない場合
-            if (weatherString.includes('晴れ')) {
-                if (weatherString.includes('くもり') || weatherString.includes('曇り')) return '🌤️'; // 晴れ時々くもり
-                return '☀️'; // 晴れ
-            } else if (weatherString.includes('雨')) {
-                 if (weatherString.includes('くもり') || weatherString.includes('曇り')) return '🌦️'; // くもり時々雨
-                 if (weatherString.includes('雪')) return '🌨️'; // 雨か雪
-                return '🌧️'; // 雨
-            } else if (weatherString.includes('くもり') || weatherString.includes('曇り')) {
-                return '☁️'; // くもり
-            } else if (weatherString.includes('雪')) {
-                return '❄️'; // 雪
-            } else if (weatherString.includes('雷')) {
-                return '⚡'; // 雷
-            } else {
-                return '❓'; // 上記以外は不明
+        function getWeatherIcon(codeOrString) {
+            if (!codeOrString) return '❓'; // データがない場合
+            const code = String(codeOrString); // 文字列に変換して扱う
+
+            // 天気コード (数字文字列) による判定を優先 (主要なコードの例)
+            if (!isNaN(parseInt(code))) { // 数字っぽいかチェック
+                if (code.startsWith('1')) { // 1xx: 晴れ系
+                    if (code === '100') return '☀️'; // 快晴
+                    if (['101', '110', '111'].includes(code)) return '🌤️'; // 晴時々曇など
+                    return '☀️'; // それ以外の晴れ系
+                } else if (code.startsWith('2')) { // 2xx: くもり系
+                    if (['201', '210', '211'].includes(code)) return '🌥️'; // 曇時々晴など
+                    return '☁️'; // それ以外のくもり系
+                } else if (code.startsWith('3')) { // 3xx: 雨系
+                     if (['301', '302', '311', '313', '303', '309'].includes(code)) return '🌦️'; // 曇時々雨など
+                     if (code === '300') return '🌧️'; // 雨
+                    return '☔'; // それ以外の雨系
+                } else if (code.startsWith('4')) { // 4xx: 雪系
+                     if (['401', '411', '413'].includes(code)) return '🌨️'; // 曇時々雪など
+                    return '❄️'; // それ以外の雪系
+                }
+                // 他にも多くのコードがありますが、ここでは代表的なもののみ
+                 return '❓'; // 不明なコード
             }
+
+            // 天気コードで判定できなかった場合、文字列で判定 (以前のロジック)
+            if (codeOrString.includes('晴れ')) { if (codeOrString.includes('くもり') || codeOrString.includes('曇り')) return '🌤️'; return '☀️'; }
+            if (codeOrString.includes('雨')) { if (codeOrString.includes('くもり') || codeOrString.includes('曇り')) return '🌦️'; if (codeOrString.includes('雪')) return '🌨️'; return '🌧️'; }
+            if (codeOrString.includes('くもり') || codeOrString.includes('曇り')) { return '☁️'; }
+            if (codeOrString.includes('雪')) { return '❄️'; }
+            if (codeOrString.includes('雷')) { return '⚡'; }
+
+            return '❓'; // それでも不明な場合
         }
 
         // ページ読み込み時に天気データを取得
