@@ -309,32 +309,39 @@
                 if (cityData.weeklyForecast && cityData.weeklyForecast.length > 0) {
                     detailsHtml += '<hr><h3>週間予報</h3><div style="display: flex; flex-wrap: wrap; gap: 10px;">'; // Flexboxで横並び
 
-                    cityData.weeklyForecast.forEach(wf => {
-                        // 日付文字列 (YYYY-MM-DD) を Date オブジェクトに変換
-                        const dateObj = new Date(wf.date);
-                        // 月と日、曜日を取得 (例: 4/29 (火))
-                        const dateString = `${dateObj.getMonth() + 1}/${dateObj.getDate()} (${['日', '月', '火', '水', '木', '金', '土'][dateObj.getDay()]})`;
-                        const weatherIcon = getWeatherIcon(wf.weatherCode); // 天気コードからアイコン取得
+                cityData.weeklyForecast.forEach((wf, index) => {
+                const dateObj = new Date(wf.date);
+                const dateString = `${dateObj.getMonth() + 1}/${dateObj.getDate()} (${['日', '月', '火', '水', '木', '金', '土'][dateObj.getDay()]})`;
+                const weatherIcon = getWeatherIcon(wf.weatherCode);
 
-                        detailsHtml += `
-                            <div style="border: 1px solid #eee; padding: 8px; border-radius: 4px; text-align: center; min-width: 80px;">
-                                <div><strong>${dateString}</strong></div>
-                                <div style="font-size: 1.5em; margin: 5px 0;">${weatherIcon}</div>
-                                <div>${wf.tempMax || 'N/A'}<small>℃</small> / ${wf.tempMin || 'N/A'}<small>℃</small></div>
-                                <div><small>降水: ${wf.pop || '--'}%</small></div>
-                                ${wf.reliability ? `<div><small>(信頼度: ${wf.reliability})</small></div>` : ''}
-                            </div>
-                        `;
-                    });
-
-                    detailsHtml += '</div>'; // Flexboxコンテナを閉じる
-                } else {
-                    detailsHtml += '<hr><p>週間予報の情報はありません。</p>';
+                // --- 今日の気温表示を調整 ---
+                let tempDisplay;
+                    if (index === 0) { // 最初の要素（今日）の場合
+                    // 今日の最高気温は cityData から取得、最低気温は N/A とする
+                    tempDisplay = `${cityData.tempTodayHigh || 'N/A'}℃ / --℃`;
+                } else { // 明日以降の場合
+                    tempDisplay = `${wf.tempMax || 'N/A'}℃ / ${wf.tempMin || 'N/A'}℃`;
                 }
+
+                detailsHtml += `
+                    <div style="border: 1px solid #eee; padding: 8px; border-radius: 4px; text-align: center; min-width: 100px;">
+                        <div><strong>${dateString} ${index === 0 ? '' : ''}</strong></div>
+                        <div style="font-size: 1.5em; margin: 5px 0;">${weatherIcon}</div>
+                        <div style="white-space: nowrap;">${tempDisplay}</div>
+                        <div><small>降水: ${wf.pop || '--'}%</small></div>
+                        ${wf.reliability ? `<div><small>(信頼度: ${wf.reliability})</small></div>` : ''}
+                    </div>
+                `;
+            });
+
+            detailsHtml += '</div>';
+        } else {
+            detailsHtml += '<hr><p>週間予報の情報はありません。</p>';
+        }
                 // --- 週間予報のHTML組み立て ---
 
 
-                detailsHtml += `<hr><p><small>発表日時: ${cityData.reportTime}<br>エリアコード: ${cityData.areaCode}</small></p>`;
+                detailsHtml += `<hr><p><small>発表日時: ${cityData.reportTime}</small></p>`;
 
                 modalContent.innerHTML = detailsHtml;
 
